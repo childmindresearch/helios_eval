@@ -1,5 +1,6 @@
 """
-Taken directly from: https://www.kaggle.com/code/metric/cmi-2025?scriptVersionId=242561727&cellId=1
+-Modified from: https://www.kaggle.com/code/metric/cmi-2025?scriptVersionId=242561727&cellId=1
+
 Hierarchical macro F1 metric for the CMI 2025 Challenge.
 
 This script defines a single entry point `score(solution, submission, row_id_column_name)`
@@ -45,20 +46,21 @@ class CompetitionMetric:
 
     def calculate_hierarchical_f1(
         self,
-        sol: pd.DataFrame,
-        sub: pd.DataFrame
+        df: pd.DataFrame,
+        sol_col: str,
+        sub_col: str
     ) -> float:
 
         # Validate gestures
-        invalid_types = {i for i in sub['gesture'].unique() if i not in self.all_classes}
+        invalid_types = {i for i in df[sub_col].unique() if i not in self.all_classes}
         if invalid_types:
             raise ParticipantVisibleError(
                 f"Invalid gesture values in submission: {invalid_types}"
             )
 
         # Compute binary F1 (Target vs Non-Target)
-        y_true_bin = sol['gesture'].isin(self.target_gestures).values
-        y_pred_bin = sub['gesture'].isin(self.target_gestures).values
+        y_true_bin = df[sol_col].isin(self.target_gestures).values
+        y_pred_bin = df[sub_col].isin(self.target_gestures).values
         f1_binary = f1_score(
             y_true_bin,
             y_pred_bin,
@@ -68,8 +70,8 @@ class CompetitionMetric:
         )
 
         # Build multi-class labels for gestures
-        y_true_mc = sol['gesture'].apply(lambda x: x if x in self.target_gestures else 'non_target')
-        y_pred_mc = sub['gesture'].apply(lambda x: x if x in self.target_gestures else 'non_target')
+        y_true_mc = df[sol_col].apply(lambda x: x if x in self.target_gestures else 'non_target')
+        y_pred_mc = df[sub_col].apply(lambda x: x if x in self.target_gestures else 'non_target')
 
         # Compute macro F1 over all gesture classes
         f1_macro = f1_score(
