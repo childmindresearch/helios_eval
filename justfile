@@ -11,4 +11,5 @@ evaluate:
 
 # Step 3: Make gif from submission confusion matrices.
 make_gif:
-    ffmpeg -framerate 10 -i ./data/figs/submission_%d.png ./data/figs/confusion.gif
+    # Note: requires ImageMagick installed on the system
+    convert -delay 20 -loop 0 ./data/figs/submission_*.png ./data/figs/confusion.gif
