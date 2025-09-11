@@ -3,22 +3,24 @@
 import os.path as op
 import pandas as pd
 import numpy as np
+import os
 
 
 # List of relevant files
-bp = '/data/gkiar/kaggle'
-f_submission_files = op.join(bp, 'files.txt')  # Bash-collected list of all local parquet filepaths for each competitor
+bp = './data'
+
+# List of all local parquet filepaths for each competitor
+f_submission_files = sorted([
+                                op.join(bp, 'submissions', fl)
+                                for fl in os.listdir(op.join(bp, 'submissions'))
+                            ])
 f_solution = op.join(bp, 'solution.csv')  # True solution for each sequence
 f_test_sequences = op.join(bp, 'test.csv')  # Test CSV file that competitors used
 f_aggregated = op.join(bp, 'top20results.parquet')  # File where we will store results
 
-# Load the list of submission records
-with open(f_submission_files, 'r') as fhandle:
-    submissions = fhandle.readlines()
-
 # For every submission, load the file and add it to a list.
-df_subs = [pd.read_parquet(sub.strip())  # Note: they are labeled as CSV files for some reason, but are parquet...
-           for sub in submissions] 
+df_subs = [pd.read_parquet(sub)
+           for sub in f_submission_files] 
 
 # Seed the table we'll merge the results into
 df_agg = df_subs[0]
