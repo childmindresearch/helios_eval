@@ -37,6 +37,7 @@ sensors = 'all_sensors'
 df = pd.read_parquet(f_aggregated)
 
 # Group dataframe by the the columns of interest and score each grouping
+# TODO: also do confusion matrix separation based on sensor groupings
 results = (df
            .groupby([dataset, sensors])
            .apply(score, include_groups=False)
