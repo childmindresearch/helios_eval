@@ -18,7 +18,7 @@ def score(df):
     return np.array([metric.calculate_hierarchical_f1(df, c_sol, c_sub) for c_sub in c_subs])
 
 # Define and load aggregated table
-f_aggregated = '/data/gkiar/kaggle/top20results.parquet'
+f_aggregated = './data/top20results.parquet'
 df = pd.read_parquet(f_aggregated)
 
 # Group dataframe by the the columns of interest and score each grouping
