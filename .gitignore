@@ -1,6 +1,7 @@
 data/solution.csv
 data/test.csv
 data/submissions/submission_*.parquet
+data/top20results.parquet
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
