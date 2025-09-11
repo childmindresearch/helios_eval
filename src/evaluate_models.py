@@ -26,7 +26,7 @@ def plot_cm(cm, fname):
     disp.plot(include_values=False, ax=ax)
     plt.title("Confusion Matrix")
     plt.xticks([])
-    disp.im_.set_clim([0, 250])
+    disp.im_.set_clim([0, 1])
     plt.savefig(fname)
     plt.close('all')
 
@@ -59,7 +59,8 @@ labels = metric.target_gestures + metric.non_target_gestures
 cms = []
 for idx, c_sub in enumerate(c_subs):
     ty_pred = df[c_sub]
-    cm = confusion_matrix(y_true, ty_pred)
+    cm = confusion_matrix(y_true, ty_pred).astype('float')
+    cm /= cm.sum(axis=1)
     cms += [cm]
     plot_cm(cm, f'./data/figs/submission_{idx}.png')
 
