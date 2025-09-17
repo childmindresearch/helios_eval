@@ -189,9 +189,9 @@ def _export(folder: Path, output_dir: Path, as_app: bool = False) -> List[dict]:
 
 
 def _copy_data_files(output_dir: Path) -> None:
-    """Copy the anonymized parquet file needed by the marimo apps to the output directory.
+    """Copy the anonymized CSV file needed by the marimo apps to the output directory.
 
-    This function copies only the top20results_anonymized.parquet file to the output directory
+    This function copies only the top20results_anonymized.csv file to the output directory
     so that the deployed apps can access the data file.
 
     Args:
@@ -200,20 +200,20 @@ def _copy_data_files(output_dir: Path) -> None:
     Returns:
         None
     """
-    source_file = Path("data/top20results_anonymized.parquet")
+    source_file = Path("data/top20results_anonymized.csv")
 
     if not source_file.exists():
         logger.warning(f"Data file not found: {source_file}")
         return
 
     output_data_dir = output_dir / "data"
-    output_file = output_data_dir / "top20results_anonymized.parquet"
+    output_file = output_data_dir / "top20results_anonymized.csv"
 
     try:
         # Create the data directory in output if it doesn't exist
         output_data_dir.mkdir(parents=True, exist_ok=True)
 
-        # Copy the specific parquet file
+        # Copy the specific CSV file
         shutil.copy2(source_file, output_file)
         logger.info(f"Successfully copied {source_file} to {output_file}")
 
