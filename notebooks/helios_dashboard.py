@@ -235,8 +235,11 @@ def create_filter_summary(
 
 @app.cell
 def _(mo, pd):
-    # Load the data
-    df = pd.read_csv("../data/top20results_anonymized.csv")
+    # Load the data from GitHub raw URL
+    data_url = "https://raw.githubusercontent.com/childmindresearch/helios_eval/refs/heads/main/data/top20results_anonymized.csv"
+
+    df = pd.read_csv(data_url)
+
 
     # Convert Usage column from object to boolean (True for public, False for private)
     df["public"] = df["Usage"] == "Public"
@@ -245,7 +248,7 @@ def _(mo, pd):
     mo.vstack(
         [
             mo.md("## Top 20 Submission Results"),
-            df,
+            df
         ]
     )
     return (df,)

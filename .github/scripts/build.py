@@ -20,7 +20,6 @@ The exported files will be placed in the specified output directory (default: _s
 # ]
 # ///
 
-import shutil
 import subprocess
 from pathlib import Path
 from typing import List, Union
@@ -188,39 +187,6 @@ def _export(folder: Path, output_dir: Path, as_app: bool = False) -> List[dict]:
     return notebook_data
 
 
-def _copy_data_files(output_dir: Path) -> None:
-    """Copy the anonymized CSV file needed by the marimo apps to the output directory.
-
-    This function copies only the top20results_anonymized.csv file to the output directory
-    so that the deployed apps can access the data file.
-
-    Args:
-        output_dir (Path): Directory where the data file will be copied
-
-    Returns:
-        None
-    """
-    source_file = Path("data/top20results_anonymized.csv")
-
-    if not source_file.exists():
-        logger.warning(f"Data file not found: {source_file}")
-        return
-
-    output_data_dir = output_dir / "data"
-    output_file = output_data_dir / "top20results_anonymized.csv"
-
-    try:
-        # Create the data directory in output if it doesn't exist
-        output_data_dir.mkdir(parents=True, exist_ok=True)
-
-        # Copy the specific CSV file
-        shutil.copy2(source_file, output_file)
-        logger.info(f"Successfully copied {source_file} to {output_file}")
-
-    except Exception as e:
-        logger.error(f"Error copying data file: {e}")
-
-
 def main(
     output_dir: Union[str, Path] = "_site",
     template: Union[str, Path] = "templates/tailwind.html.j2",
@@ -229,9 +195,8 @@ def main(
 
     This function:
     1. Parses command line arguments
-    2. Copies data files needed by the apps
-    3. Exports all marimo notebooks in the 'notebooks' and 'apps' directories
-    4. Generates an index.html file that lists all the notebooks
+    2. Exports all marimo notebooks in the 'notebooks' and 'apps' directories
+    3. Generates an index.html file that lists all the notebooks
 
     Command line arguments:
         --output-dir: Directory where the exported files will be saved (default: _site)
@@ -252,9 +217,6 @@ def main(
     # Convert template to Path if provided
     template_file: Path = Path(template)
     logger.info(f"Using template file: {template_file}")
-
-    # Copy data files to output directory
-    _copy_data_files(output_dir_path)
 
     # Export notebooks from the notebooks/ directory
     notebooks_data = _export(Path("notebooks"), output_dir_path, as_app=False)
