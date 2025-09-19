@@ -20,7 +20,6 @@ def _():
     from sklearn.metrics import f1_score
 
     import marimo as mo
-
     return alt, f1_score, mo, np, pd
 
 
@@ -36,12 +35,11 @@ def _():
     BOXPLOT_HEIGHT = 300
 
     # Bootstrap configuration
-    DEFAULT_BOOTSTRAP_SAMPLES = 1000
+    DEFAULT_BOOTSTRAP_SAMPLES = 100
     CONFIDENCE_INTERVAL_PERCENTILES = [2.5, 97.5]
 
     # Submission configuration
     NUM_SUBMISSIONS = 20
-    SUBMISSION_ID_RANGE = range(NUM_SUBMISSIONS)
 
     # Chart color schemes
     CHART_COLOR_SCHEME = "redblue"
@@ -71,7 +69,9 @@ def _():
         CONFIDENCE_INTERVAL_PERCENTILES,
         DATA_URL,
         DEFAULT_BOOTSTRAP_SAMPLES,
+        DELTA_COLOR_SCHEME,
         GESTURE_TYPE_COLORS,
+        METRIC_DISPLAY_ORDER,
         METRIC_PRECISION,
         NUM_SUBMISSIONS,
     )
@@ -141,7 +141,6 @@ def _(f1_score, mo):
             f1_macro = f1_score(y_true_mc, y_pred_mc, average="macro", zero_division=0)
 
             return 0.5 * f1_binary + 0.5 * f1_macro
-
     return (CompetitionMetric,)
 
 
@@ -178,7 +177,6 @@ def _(mo):
             "Accuracy": round(accuracy, 5),
             "NPV": round(npv, 5),
         }
-
     return (calculate_metrics_from_confusion_matrix,)
 
 
@@ -197,7 +195,6 @@ def _(calculate_metrics_from_confusion_matrix, mo):
         tn = ((y_true != positive_class) & (y_pred != positive_class)).sum()
 
         return calculate_metrics_from_confusion_matrix(tp, fn, fp, tn)
-
     return (calculate_binary_metrics,)
 
 
@@ -215,97 +212,7 @@ def _(calculate_metrics_from_confusion_matrix, mo):
         tn = (~actual_positive & ~pred_positive).sum()
 
         return calculate_metrics_from_confusion_matrix(tp, fn, fp, tn)
-
     return (calculate_collapsed_metrics,)
-
-
-@app.cell
-def _(CHART_HEIGHT, CHART_WIDTH, GESTURE_TYPE_COLORS, alt, mo, pd):
-    # Chart creation helpers
-    @mo.persistent_cache
-    def create_bar_chart_with_selection(
-        data, x_field, y_field, color_field=None, title="", tooltip_fields=None
-    ):
-        """Create a bar chart with selection capabilities."""
-        click_selector = alt.selection_point()
-
-        chart = alt.Chart(data).mark_bar(clip=True).add_params(click_selector)
-
-        encoding = {
-            "x": alt.X(f"{x_field}:N", title=x_field.replace("_", " ").title()),
-            "y": alt.Y(f"{y_field}:Q", title=y_field.replace("_", " ").title()),
-            "stroke": alt.condition(
-                click_selector, alt.value("black"), alt.value(None)
-            ),
-            "strokeWidth": alt.condition(click_selector, alt.value(1), alt.value(0)),
-        }
-
-        if color_field:
-            encoding["color"] = alt.condition(
-                click_selector,
-                alt.Color(f"{color_field}:Q"),
-                alt.value("lightgrey"),
-            )
-
-        if tooltip_fields:
-            encoding["tooltip"] = [
-                f"{_field}:N" if _field.endswith("_id") else f"{_field}:Q"
-                for _field in tooltip_fields
-            ]
-
-        chart = chart.encode(**encoding).properties(
-            width=CHART_WIDTH,
-            height=CHART_HEIGHT,
-            title=title,
-        )
-
-        return chart
-
-    @mo.persistent_cache
-    def create_delta_chart(
-        data,
-        gesture_field="gesture",
-        delta_field="delta",
-        title="",
-        with_error_bars=False,
-    ):
-        """Create a delta visualization chart with optional error bars."""
-        base = alt.Chart(data)
-
-        points = base.mark_point(filled=True, size=60).encode(
-            y=alt.Y(f"{gesture_field}:N", sort=list(data[gesture_field])),
-            x=alt.X(f"{delta_field}:Q", title="Delta (All − IMU)"),
-            color=alt.Color(
-                "gesture_type:N",
-                sort=["Target", "Non-Target"],
-                scale=alt.Scale(range=GESTURE_TYPE_COLORS),
-            ),
-        )
-
-        zero_rule = (
-            alt.Chart(pd.DataFrame({"x": [0]}))
-            .mark_rule(color="#888", strokeDash=[4, 4])
-            .encode(x="x:Q")
-        )
-
-        chart = points + zero_rule
-
-        if with_error_bars and "ci_lo" in data.columns and "ci_hi" in data.columns:
-            error_bars = base.mark_rule().encode(
-                y=alt.Y(f"{gesture_field}:N", sort=list(data[gesture_field])),
-                x=alt.X("ci_lo:Q"),
-                x2="ci_hi:Q",
-                color=alt.Color(
-                    "gesture_type:N",
-                    sort=["Target", "Non-Target"],
-                    scale=alt.Scale(range=GESTURE_TYPE_COLORS),
-                ),
-            )
-            chart = error_bars + points + zero_rule
-
-        return chart.properties(title=title, width=CHART_WIDTH)
-
-    return
 
 
 @app.cell
@@ -371,7 +278,6 @@ def _(mo):
             return df[mask]
         else:
             return df
-
     return apply_data_filters, build_filter_masks
 
 
@@ -418,7 +324,6 @@ def _(mo):
             if filter_parts
             else "No filter selected, including the whole dataset"
         )
-
     return (create_filter_summary,)
 
 
@@ -458,7 +363,6 @@ def _(mo, pd):
                 )
 
         return pd.DataFrame(stacked_rows)
-
     return (stack_submissions,)
 
 
@@ -488,7 +392,6 @@ def _(calculate_binary_metrics, calculate_collapsed_metrics, mo):
             raise ValueError(f"Unknown metric_type: {metric_type}")
 
         return metrics["F1-Score"]
-
     return (compute_f1_score,)
 
 
@@ -559,7 +462,6 @@ def _(METRIC_PRECISION, compute_f1_score, mo):
             "n_all": int(n_all),
             "n_imu": int(n_imu),
         }
-
     return (compute_simple_delta,)
 
 
@@ -696,7 +598,6 @@ def _(
             "n_all": int(n_all),
             "n_imu": int(n_imu),
         }
-
     return (bootstrap_delta_ci,)
 
 
@@ -971,6 +872,7 @@ def _(
     CHART_HEIGHT,
     CHART_WIDTH,
     DEFAULT_BOOTSTRAP_SAMPLES,
+    DELTA_COLOR_SCHEME,
     NUM_SUBMISSIONS,
     alt,
     bootstrap_delta_ci,
@@ -1119,7 +1021,9 @@ def _(
                             "value:Q", title="Competition Metric Delta (All − IMU)"
                         ),
                         color=alt.Color(
-                            "value:Q", scale=alt.Scale(scheme="reds"), legend=None
+                            "value:Q",
+                            scale=alt.Scale(scheme=DELTA_COLOR_SCHEME),
+                            legend=None,
                         ),
                         tooltip=[
                             alt.Tooltip("metric:N", title="Metric"),
@@ -1277,7 +1181,10 @@ def _(
                             ),
                             color=alt.condition(
                                 f"datum.submission_id == {_selected_submission_id}",
-                                alt.Color("delta:Q", scale=alt.Scale(scheme="reds")),
+                                alt.Color(
+                                    "delta:Q",
+                                    scale=alt.Scale(scheme=DELTA_COLOR_SCHEME),
+                                ),
                                 alt.value("lightgrey"),
                             ),
                             stroke=alt.condition(
@@ -1326,7 +1233,9 @@ def _(
                             y=alt.Y(
                                 "delta:Q", title="Competition metric delta (All − IMU)"
                             ),
-                            color=alt.Color("delta:Q", scale=alt.Scale(scheme="reds")),
+                            color=alt.Color(
+                                "delta:Q", scale=alt.Scale(scheme=DELTA_COLOR_SCHEME)
+                            ),
                             tooltip=[
                                 alt.Tooltip("submission_id:N", title="Submission"),
                                 alt.Tooltip("delta:Q", format=".3f"),
@@ -2339,6 +2248,7 @@ def _(
     BOXPLOT_HEIGHT,
     BOXPLOT_WIDTH,
     GESTURE_TYPE_COLORS,
+    METRIC_DISPLAY_ORDER,
     alt,
     calculate_binary_metrics,
     collapse_submissions_filter,
@@ -2474,16 +2384,7 @@ def _(
                         "metric:N",
                         title="Evaluation Metric",
                         axis=alt.Axis(labelAngle=45),
-                        sort=[
-                            "F1-Score",
-                            "Accuracy",
-                            "Precision",
-                            "Recall",
-                            "Specificity",
-                            "NPV",
-                            "1-FNR",
-                            "1-FPR",
-                        ],
+                        sort=METRIC_DISPLAY_ORDER,
                     ),
                     xOffset=alt.XOffset(
                         "gesture_type:N",
@@ -2661,16 +2562,7 @@ def _(
                         "metric:N",
                         title="Evaluation Metric",
                         axis=alt.Axis(labelAngle=45),
-                        sort=[
-                            "F1-Score",
-                            "Accuracy",
-                            "Precision",
-                            "Recall",
-                            "Specificity",
-                            "NPV",
-                            "1-FNR",
-                            "1-FPR",
-                        ],
+                        sort=METRIC_DISPLAY_ORDER,
                     ),
                     xOffset=alt.XOffset(
                         "gesture_type:N",
