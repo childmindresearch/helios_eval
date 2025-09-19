@@ -216,6 +216,62 @@ def _(calculate_metrics_from_confusion_matrix, mo):
 
 
 @app.cell
+def _(calculate_binary_metrics, calculate_metrics_from_confusion_matrix, mo):
+    @mo.persistent_cache
+    def calculate_macro_averaged_metrics(y_true, y_pred, gesture_list):
+        """Calculate true macro-averaged metrics across a list of gestures.
+
+        This computes metrics for each individual gesture separately, then averages
+        ALL resulting metrics (including confusion matrix counts), giving equal
+        importance to each gesture regardless of sample count.
+
+        Note: True macro-averaging averages the final calculated metrics, not the
+        confusion matrix counts. The averaged confusion matrix counts are provided
+        for reference but should be interpreted carefully as they represent the
+        average per-gesture counts, not the total counts.
+
+        Args:
+            y_true: Ground truth labels
+            y_pred: Predicted labels
+            gesture_list: List of gesture labels to include in macro-average
+
+        Returns:
+            Dict with macro-averaged metrics
+        """
+        individual_metrics = []
+
+        # Calculate metrics for each gesture individually
+        for gesture in gesture_list:
+            gesture_metrics = calculate_binary_metrics(y_true, y_pred, gesture)
+            individual_metrics.append(gesture_metrics)
+
+        if not individual_metrics:
+            # Return zeros if no valid gestures
+            return calculate_metrics_from_confusion_matrix(0, 0, 0, 0)
+
+        # True macro-average: average all final calculated metrics across gestures
+        # Do NOT sum confusion matrix counts - that would be micro-averaging
+        macro_metrics = {}
+        metric_keys = individual_metrics[0].keys()
+        n_gestures = len(individual_metrics)
+
+        for key in metric_keys:
+            # Average ALL metrics across gestures for true macro-averaging
+            macro_metrics[key] = sum(m[key] for m in individual_metrics) / n_gestures
+
+        # Round the averaged metrics to maintain precision
+        for key in macro_metrics:
+            if key not in ["TP", "FN", "FP", "TN"]:
+                macro_metrics[key] = round(macro_metrics[key], 5)
+            else:
+                # Round confusion matrix counts to integers
+                macro_metrics[key] = round(macro_metrics[key])
+
+        return macro_metrics
+    return (calculate_macro_averaged_metrics,)
+
+
+@app.cell
 def _(mo):
     @mo.persistent_cache
     def apply_data_filters(
@@ -367,7 +423,12 @@ def _(mo, pd):
 
 
 @app.cell
-def _(calculate_binary_metrics, calculate_collapsed_metrics, mo):
+def _(
+    calculate_binary_metrics,
+    calculate_collapsed_metrics,
+    calculate_macro_averaged_metrics,
+    mo,
+):
     @mo.persistent_cache
     def compute_f1_score(df, truth_col, pred_col, metric_type, target_param=None):
         """
@@ -384,7 +445,13 @@ def _(calculate_binary_metrics, calculate_collapsed_metrics, mo):
             metrics = calculate_binary_metrics(
                 df[truth_col], df[pred_col], target_param
             )
-        elif metric_type in ["collapsed_target", "collapsed_non_target"]:
+        elif metric_type == "collapsed_target":
+            # Use macro-averaging for target gestures
+            metrics = calculate_macro_averaged_metrics(
+                df[truth_col], df[pred_col], target_param
+            )
+        elif metric_type == "collapsed_non_target":
+            # Use pooling for non-target gestures
             metrics = calculate_collapsed_metrics(
                 df[truth_col], df[pred_col], target_param
             )
@@ -392,11 +459,17 @@ def _(calculate_binary_metrics, calculate_collapsed_metrics, mo):
             raise ValueError(f"Unknown metric_type: {metric_type}")
 
         return metrics["F1-Score"]
-    return (compute_f1_score,)
+    return
 
 
 @app.cell
-def _(METRIC_PRECISION, compute_f1_score, mo):
+def _(
+    METRIC_PRECISION,
+    calculate_binary_metrics,
+    calculate_collapsed_metrics,
+    calculate_macro_averaged_metrics,
+    mo,
+):
     @mo.persistent_cache
     def compute_simple_delta(df, truth_col, pred_col, metric_type, target_param=None):
         """
@@ -419,28 +492,28 @@ def _(METRIC_PRECISION, compute_f1_score, mo):
 
         # Compute metric values based on type
         if metric_type == "gesture":
-            metric_all = compute_f1_score(
-                df_all, truth_col, pred_col, "gesture", target_param
-            )
-            metric_imu = compute_f1_score(
-                df_imu, truth_col, pred_col, "gesture", target_param
-            )
+            metric_all = calculate_binary_metrics(
+                df_all[truth_col], df_all[pred_col], target_param
+            )["F1-Score"]
+            metric_imu = calculate_binary_metrics(
+                df_imu[truth_col], df_imu[pred_col], target_param
+            )["F1-Score"]
             key_prefix = "f1"
         elif metric_type == "collapsed_target":
-            metric_all = compute_f1_score(
-                df_all, truth_col, pred_col, "collapsed_target", target_param
-            )
-            metric_imu = compute_f1_score(
-                df_imu, truth_col, pred_col, "collapsed_target", target_param
-            )
+            metric_all = calculate_macro_averaged_metrics(
+                df_all[truth_col], df_all[pred_col], target_param
+            )["F1-Score"]
+            metric_imu = calculate_macro_averaged_metrics(
+                df_imu[truth_col], df_imu[pred_col], target_param
+            )["F1-Score"]
             key_prefix = "f1"
         elif metric_type == "collapsed_non_target":
-            metric_all = compute_f1_score(
-                df_all, truth_col, pred_col, "collapsed_non_target", target_param
-            )
-            metric_imu = compute_f1_score(
-                df_imu, truth_col, pred_col, "collapsed_non_target", target_param
-            )
+            metric_all = calculate_collapsed_metrics(
+                df_all[truth_col], df_all[pred_col], target_param
+            )["F1-Score"]
+            metric_imu = calculate_collapsed_metrics(
+                df_imu[truth_col], df_imu[pred_col], target_param
+            )["F1-Score"]
             key_prefix = "f1"
         elif metric_type == "competition":
             metric_all = target_param.calculate_hierarchical_f1(
@@ -470,7 +543,9 @@ def _(
     CONFIDENCE_INTERVAL_PERCENTILES,
     DEFAULT_BOOTSTRAP_SAMPLES,
     METRIC_PRECISION,
-    compute_f1_score,
+    calculate_binary_metrics,
+    calculate_collapsed_metrics,
+    calculate_macro_averaged_metrics,
     mo,
 ):
     @mo.persistent_cache
@@ -510,28 +585,28 @@ def _(
 
         # Point estimates on full data
         if metric_type == "gesture":
-            metric_all = compute_f1_score(
-                df_all, truth_col, pred_col, "gesture", target_param
-            )
-            metric_imu = compute_f1_score(
-                df_imu, truth_col, pred_col, "gesture", target_param
-            )
+            metric_all = calculate_binary_metrics(
+                df_all[truth_col], df_all[pred_col], target_param
+            )["F1-Score"]
+            metric_imu = calculate_binary_metrics(
+                df_imu[truth_col], df_imu[pred_col], target_param
+            )["F1-Score"]
             key_prefix = "f1"
         elif metric_type == "collapsed_target":
-            metric_all = compute_f1_score(
-                df_all, truth_col, pred_col, "collapsed_target", target_param
-            )
-            metric_imu = compute_f1_score(
-                df_imu, truth_col, pred_col, "collapsed_target", target_param
-            )
+            metric_all = calculate_macro_averaged_metrics(
+                df_all[truth_col], df_all[pred_col], target_param
+            )["F1-Score"]
+            metric_imu = calculate_macro_averaged_metrics(
+                df_imu[truth_col], df_imu[pred_col], target_param
+            )["F1-Score"]
             key_prefix = "f1"
         elif metric_type == "collapsed_non_target":
-            metric_all = compute_f1_score(
-                df_all, truth_col, pred_col, "collapsed_non_target", target_param
-            )
-            metric_imu = compute_f1_score(
-                df_imu, truth_col, pred_col, "collapsed_non_target", target_param
-            )
+            metric_all = calculate_collapsed_metrics(
+                df_all[truth_col], df_all[pred_col], target_param
+            )["F1-Score"]
+            metric_imu = calculate_collapsed_metrics(
+                df_imu[truth_col], df_imu[pred_col], target_param
+            )["F1-Score"]
             key_prefix = "f1"
         elif metric_type == "competition":
             metric_all = target_param.calculate_hierarchical_f1(
@@ -553,39 +628,51 @@ def _(
         imu_idx = np.arange(n_imu)
 
         for _ in range(n_boot):
-            bs_all = df_all.iloc[rng.choice(all_idx, size=n_all, replace=True)]
-            bs_imu = df_imu.iloc[rng.choice(imu_idx, size=n_imu, replace=True)]
+            # Resample with replacement
+            boot_all_idx = rng.choice(all_idx, size=n_all, replace=True)
+            boot_imu_idx = rng.choice(imu_idx, size=n_imu, replace=True)
+            df_boot_all = df_all.iloc[boot_all_idx]
+            df_boot_imu = df_imu.iloc[boot_imu_idx]
 
+            # Compute metrics on bootstrap samples
+            boot_metric_all = 0
+            boot_metric_imu = 0
             if metric_type == "gesture":
-                metric_all_bs = compute_f1_score(
-                    bs_all, truth_col, pred_col, "gesture", target_param
+                metrics_boot_all = calculate_binary_metrics(
+                    df_boot_all[truth_col], df_boot_all[pred_col], target_param
                 )
-                metric_imu_bs = compute_f1_score(
-                    bs_imu, truth_col, pred_col, "gesture", target_param
+                metrics_boot_imu = calculate_binary_metrics(
+                    df_boot_imu[truth_col], df_boot_imu[pred_col], target_param
                 )
+                boot_metric_all = metrics_boot_all["F1-Score"]
+                boot_metric_imu = metrics_boot_imu["F1-Score"]
             elif metric_type == "collapsed_target":
-                metric_all_bs = compute_f1_score(
-                    bs_all, truth_col, pred_col, "collapsed_target", target_param
+                metrics_boot_all = calculate_macro_averaged_metrics(
+                    df_boot_all[truth_col], df_boot_all[pred_col], target_param
                 )
-                metric_imu_bs = compute_f1_score(
-                    bs_imu, truth_col, pred_col, "collapsed_target", target_param
+                metrics_boot_imu = calculate_macro_averaged_metrics(
+                    df_boot_imu[truth_col], df_boot_imu[pred_col], target_param
                 )
+                boot_metric_all = metrics_boot_all["F1-Score"]
+                boot_metric_imu = metrics_boot_imu["F1-Score"]
             elif metric_type == "collapsed_non_target":
-                metric_all_bs = compute_f1_score(
-                    bs_all, truth_col, pred_col, "collapsed_non_target", target_param
+                metrics_boot_all = calculate_collapsed_metrics(
+                    df_boot_all[truth_col], df_boot_all[pred_col], target_param
                 )
-                metric_imu_bs = compute_f1_score(
-                    bs_imu, truth_col, pred_col, "collapsed_non_target", target_param
+                metrics_boot_imu = calculate_collapsed_metrics(
+                    df_boot_imu[truth_col], df_boot_imu[pred_col], target_param
                 )
+                boot_metric_all = metrics_boot_all["F1-Score"]
+                boot_metric_imu = metrics_boot_imu["F1-Score"]
             elif metric_type == "competition":
-                metric_all_bs = target_param.calculate_hierarchical_f1(
-                    bs_all, truth_col, pred_col
+                boot_metric_all = target_param.calculate_hierarchical_f1(
+                    df_boot_all, truth_col, pred_col
                 )
-                metric_imu_bs = target_param.calculate_hierarchical_f1(
-                    bs_imu, truth_col, pred_col
+                boot_metric_imu = target_param.calculate_hierarchical_f1(
+                    df_boot_imu, truth_col, pred_col
                 )
 
-            deltas.append(metric_all_bs - metric_imu_bs)
+            deltas.append(boot_metric_all - boot_metric_imu)
 
         lo, hi = np.percentile(deltas, CONFIDENCE_INTERVAL_PERCENTILES).tolist()
 
@@ -674,13 +761,13 @@ def _(DEFAULT_BOOTSTRAP_SAMPLES, mo):
         value=True, label="Include only-IMU-sensors subset"
     )
     collapse_non_target_filter = mo.ui.switch(
-        value=True, label="Collapse all non-target gestures into one row"
+        value=True, label="Collapse all non-target gestures into one row (pooling)"
     )
     collapse_target_filter = mo.ui.switch(
-        value=False, label="Collapse all target gestures into one row"
+        value=False, label="Collapse all target gestures into one row (macro-averaging)"
     )
     collapse_submissions_filter = mo.ui.switch(
-        value=False, label="Collapse all submissions into overall evaluation"
+        value=False, label="Collapse all submissions for overall evaluation (pooling)"
     )
     bootstrap_toggle = mo.ui.switch(
         value=False,
@@ -713,6 +800,10 @@ def _(DEFAULT_BOOTSTRAP_SAMPLES, mo):
                 widths=[1, 2],
             ),
             mo.hstack([collapse_submissions_filter], justify="start", widths=[1]),
+            mo.md(
+                "<u>Macro-averaging</u>: Equal weighting regardless of sample count  \n"
+                "<u>Pooling</u>: Sample-weighted averaging"
+            ),
             mo.md("**Bootstrapped Estimation:**"),
             mo.hstack(
                 [bootstrap_toggle, bootstrap_samples], justify="start", widths=[1, 2]
@@ -760,7 +851,7 @@ def _(
         # Create boxplot
         score_chart = mo.ui.altair_chart(
             alt.Chart(boxplot_data)
-            .mark_boxplot(size=40, color="steelblue", outliers={"size": 8})
+            .mark_boxplot(size=40, color="green", outliers={"size": 8})
             .encode(
                 x=alt.X("category:N", title="", axis=alt.Axis(labelAngle=0)),
                 y=alt.Y(
@@ -852,7 +943,7 @@ def _(
             )
         )
 
-        chart_title = "## Hierarchical Macro F1 Scores by Submission"
+        chart_title = "## Competition Metric Scores by Submission"
         chart_description = "Click on a bar to see submission details below:"
 
         display_content = mo.vstack(
@@ -918,7 +1009,7 @@ def _(
         )
     else:
         if collapse_submissions_filter.value:
-            # Handle collapsed submissions mode - show overall delta summary
+            # Handle collapsed submissions mode - show overall delta only
             # Get number of bootstrap samples, default to DEFAULT_BOOTSTRAP_SAMPLES if invalid
             try:
                 _overview_n_bootstrap = (
@@ -1121,18 +1212,19 @@ def _(
             # Per-submission overall deltas across all NUM_SUBMISSIONS submissions
             overview_sub_rows = []
             for _sid in range(NUM_SUBMISSIONS):
-                if bootstrap_toggle.value:
-                    # Get number of bootstrap samples, default to DEFAULT_BOOTSTRAP_SAMPLES if invalid
-                    try:
-                        _overview_n_bootstrap = (
-                            int(bootstrap_samples.value)
-                            if bootstrap_samples.value
-                            else DEFAULT_BOOTSTRAP_SAMPLES
-                        )
-                    except (ValueError, TypeError):
-                        _overview_n_bootstrap = DEFAULT_BOOTSTRAP_SAMPLES
+                # Get number of bootstrap samples, default to DEFAULT_BOOTSTRAP_SAMPLES if invalid
+                try:
+                    _overview_n_bootstrap = (
+                        int(bootstrap_samples.value)
+                        if bootstrap_samples.value
+                        else DEFAULT_BOOTSTRAP_SAMPLES
+                    )
+                except (ValueError, TypeError):
+                    _overview_n_bootstrap = DEFAULT_BOOTSTRAP_SAMPLES
 
-                    overview_res = bootstrap_delta_ci(
+                # Calculate delta for all data
+                if bootstrap_toggle.value:
+                    all_data_res = bootstrap_delta_ci(
                         overview_filtered_df,
                         np,
                         truth_col,
@@ -1143,21 +1235,25 @@ def _(
                         seed=100 + _sid,
                     )
                 else:
-                    overview_res = compute_simple_delta(
+                    all_data_res = compute_simple_delta(
                         overview_filtered_df,
                         truth_col,
                         f"gesture{_sid}",
                         "competition",
                         competition_metric,
                     )
-                if overview_res is None:
-                    continue
-                overview_sub_rows.append({"submission_id": _sid, **overview_res})
+                if all_data_res is not None:
+                    overview_sub_rows.append(
+                        {
+                            "submission_id": _sid,
+                            **all_data_res,
+                        }
+                    )
 
             if overview_sub_rows:
                 overview_subs_df = (
                     pd.DataFrame(overview_sub_rows)
-                    .sort_values("delta", ascending=False)
+                    .sort_values("submission_id", ascending=True)
                     .reset_index(drop=True)
                 )
 
@@ -1168,7 +1264,7 @@ def _(
                         score_chart.value.iloc[0]["submission_id"]
                     )
 
-                # Create chart with or without error bars based on bootstrap toggle
+                # Create simple bar chart
                 if _selected_submission_id is not None:
                     # When a submission is selected, highlight it and gray out others
                     overview_subs_chart = (
@@ -1184,6 +1280,7 @@ def _(
                                 alt.Color(
                                     "delta:Q",
                                     scale=alt.Scale(scheme=DELTA_COLOR_SCHEME),
+                                    legend=None,
                                 ),
                                 alt.value("lightgrey"),
                             ),
@@ -1234,7 +1331,8 @@ def _(
                                 "delta:Q", title="Competition metric delta (All − IMU)"
                             ),
                             color=alt.Color(
-                                "delta:Q", scale=alt.Scale(scheme=DELTA_COLOR_SCHEME)
+                                "delta:Q",
+                                scale=alt.Scale(scheme=DELTA_COLOR_SCHEME),
                             ),
                             tooltip=[
                                 alt.Tooltip("submission_id:N", title="Submission"),
@@ -1270,7 +1368,7 @@ def _(
                             alt.Chart(overview_subs_df)
                             .mark_rule()
                             .encode(
-                                x="submission_id:N",
+                                x=alt.X("submission_id:N"),
                                 y="ci_lo:Q",
                                 y2="ci_hi:Q",
                                 color=alt.condition(
@@ -1333,7 +1431,7 @@ def _(
                 )
                 overview_display = mo.vstack(
                     [
-                        mo.md("### Per-Submission Delta Overview"),
+                        mo.md("### Per-Submission Competition Metric Delta Overview"),
                         mo.md(
                             f"This chart shows how much better (or worse) each submission performs with all-sensors versus only-IMU sensors{_bootstrap_status}. "
                             "Positive values indicate all-sensors performs better. When you select a submission from the first chart above, the corresponding bar is highlighted below. "
@@ -1395,6 +1493,7 @@ def _(
     apply_data_filters,
     calculate_binary_metrics,
     calculate_collapsed_metrics,
+    calculate_macro_averaged_metrics,
     collapse_non_target_filter,
     collapse_submissions_filter,
     collapse_target_filter,
@@ -1430,8 +1529,8 @@ def _(
 
         # Handle target gestures based on collapse setting
         if collapse_target_filter.value:
-            # Calculate collapsed metrics for all target gestures
-            _collapsed_target_metrics = calculate_collapsed_metrics(
+            # Calculate macro-averaged metrics for all target gestures
+            _collapsed_target_metrics = calculate_macro_averaged_metrics(
                 _y_true, _y_pred, competition_metric.target_gestures
             )
             _eval_data.append(
@@ -1451,7 +1550,7 @@ def _(
 
         # Handle non-target gestures based on collapse setting
         if collapse_non_target_filter.value:
-            # Calculate collapsed metrics for all non-target gestures
+            # Calculate collapsed metrics for all non-target gestures (pooling)
             _collapsed_metrics = calculate_collapsed_metrics(
                 _y_true, _y_pred, competition_metric.non_target_gestures
             )
@@ -1521,7 +1620,7 @@ def _(
         # Handle target gestures based on collapse setting
         if collapse_target_filter.value:
             # Calculate collapsed metrics for all target gestures
-            _collapsed_target_metrics = calculate_collapsed_metrics(
+            _collapsed_target_metrics = calculate_macro_averaged_metrics(
                 _y_true, _y_pred, competition_metric.target_gestures
             )
             _eval_data.append(
@@ -1541,7 +1640,7 @@ def _(
 
         # Handle non-target gestures based on collapse setting
         if collapse_non_target_filter.value:
-            # Calculate collapsed metrics for all non-target gestures
+            # Calculate collapsed metrics for all non-target gestures (pooling)
             _collapsed_metrics = calculate_collapsed_metrics(
                 _y_true, _y_pred, competition_metric.non_target_gestures
             )
@@ -1678,7 +1777,7 @@ def _(
                 ],
             )
             .properties(
-                title=f"Overall Per-Gesture F1 Scores (All Submissions) ({_filter_summary})"
+                title=f"Overall Per-Gesture F1-Scores (All Submissions) ({_filter_summary})"
             )
             .interactive()
         )
@@ -1741,12 +1840,14 @@ def _(
                 ],
             )
             .properties(
-                title=f"Per-Gesture F1 Scores for Submission {_selected_submission_id} ({_filter_summary})"
+                title=f"Per-Gesture F1-Scores for Submission {_selected_submission_id} ({_filter_summary})"
             )
             .interactive()
         )
     else:
-        f1_score_chart = mo.md("*Select a submission to see per-gesture F1 scores*")
+        f1_score_chart = mo.md(
+            "*Select a submission to see per-gesture F1-scores*"
+        )
 
     f1_score_chart
     return
@@ -1867,13 +1968,27 @@ def _(
         """Create the delta visualization chart."""
         base = alt.Chart(delta_df)
 
+        # Determine the metric type based on column names
+        has_score_columns = "score_all" in delta_df.columns
+
+        if has_score_columns:
+            metric_label = "Competition Score"
+            all_col = "score_all"
+            imu_col = "score_imu"
+        else:
+            metric_label = "F1 Score"
+            all_col = "f1_all"
+            imu_col = "f1_imu"
+
         # Base tooltip
         tooltip_list = [
             alt.Tooltip("gesture:N"),
             alt.Tooltip("gesture_type:N", title="Type"),
             alt.Tooltip("delta:Q", format=".3f"),
-            alt.Tooltip("f1_all:Q", title="All-sensors F1", format=".3f"),
-            alt.Tooltip("f1_imu:Q", title="Only-IMU-sensors F1", format=".3f"),
+            alt.Tooltip(
+                f"{all_col}:Q", title=f"All-sensors {metric_label}", format=".3f"
+            ),
+            alt.Tooltip(f"{imu_col}:Q", title=f"IMU-only {metric_label}", format=".3f"),
         ]
 
         if use_bootstrap:
@@ -1887,7 +2002,7 @@ def _(
         # Points
         points = base.mark_point(filled=True, size=60).encode(
             y=alt.Y("gesture:N", sort=list(delta_df["gesture"])),
-            x=alt.X("delta:Q", title="F1 delta (All − IMU)"),
+            x=alt.X("delta:Q", title=f"{metric_label} Delta (All-sensors − IMU-only)"),
             color=alt.Color(
                 "gesture_type:N",
                 sort=["Target", "Non-Target"],
@@ -1907,7 +2022,9 @@ def _(
         if use_bootstrap:
             error_bars = base.mark_rule().encode(
                 y=alt.Y("gesture:N", sort=list(delta_df["gesture"])),
-                x=alt.X("ci_lo:Q", title="F1 delta (All − IMU)"),
+                x=alt.X(
+                    "ci_lo:Q", title=f"{metric_label} Delta (All-sensors − IMU-only)"
+                ),
                 x2="ci_hi:Q",
                 color=alt.Color(
                     "gesture_type:N",
@@ -2032,7 +2149,7 @@ def _(
                 filter_summary = _create_filter_summary()
 
                 chart = chart.properties(
-                    title=f"Overall Per-Gesture F1 Delta (All Submissions) ({filter_summary}){' with 95% CIs' if bootstrap_toggle.value else ''}",
+                    title=f"Overall Per-Gesture F1 Score Delta (All Submissions) ({filter_summary}){' with 95% CIs' if bootstrap_toggle.value else ''}",
                     width=CHART_WIDTH,
                     height=max(BOXPLOT_HEIGHT, 20 * len(delta_df)),
                 ).interactive()
@@ -2076,12 +2193,17 @@ def _(
 
                 view = mo.vstack(
                     [
-                        mo.md("### Overall Per-Gesture Deltas (All Submissions)"),
+                        mo.md(
+                            "### Overall Per-Gesture F1 Score Deltas (All Submissions)"
+                        ),
                         mo.md(
                             f"Detailed breakdown showing how each gesture type benefits from additional sensor data across all submissions{bootstrap_status}. "
                             "This analysis respects both collapse gesture settings and Public/Private filters, but ignores sensor toggles (always compares both sensor subsets)."
                         ),
                         mo.md(header) if header else mo.md(""),
+                        mo.md(
+                            "**Note:** Individual gesture analysis uses binary F1 scores (gesture vs. all others), while the overview chart above uses the full Competition Metric (Hierarchical Macro F1)."
+                        ),
                         chart,
                         mo.md("Per-gesture table (with sample counts):"),
                         mo.ui.table(
@@ -2179,7 +2301,7 @@ def _(
                 filter_summary = _create_filter_summary()
 
                 chart = chart.properties(
-                    title=f"Per-gesture F1 delta (All − IMU) for Submission {_selected_submission_id} ({filter_summary}){' with 95% CIs' if bootstrap_toggle.value else ''}",
+                    title=f"Per-Gesture F1 Score Delta (All − IMU) for Submission {_selected_submission_id} ({filter_summary}){' with 95% CIs' if bootstrap_toggle.value else ''}",
                     width=CHART_WIDTH,
                     height=max(BOXPLOT_HEIGHT, 20 * len(delta_df)),
                 ).interactive()
@@ -2224,13 +2346,16 @@ def _(
                 view = mo.vstack(
                     [
                         mo.md(
-                            f"### Per-Gesture Deltas for Submission {_selected_submission_id}"
+                            f"### Per-Gesture F1 Score Deltas for Submission {_selected_submission_id}"
                         ),
                         mo.md(
                             f"Detailed breakdown showing how each gesture type benefits from additional sensor data{bootstrap_status}. "
                             "This analysis respects both collapse gesture settings and Public/Private filters, but ignores sensor toggles (always compares both sensor subsets)."
                         ),
                         mo.md(header) if header else mo.md(""),
+                        mo.md(
+                            "**Note:** Individual gesture analysis uses binary F1 scores (gesture vs. all others), while the overview chart above uses the full Competition Metric (Hierarchical Macro F1)."
+                        ),
                         chart,
                         mo.md("Per-gesture table (with sample counts):"),
                         mo.ui.table(
