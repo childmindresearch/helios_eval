@@ -20,6 +20,7 @@ def _():
     from sklearn.metrics import f1_score
 
     import marimo as mo
+
     return alt, f1_score, mo, np, pd
 
 
@@ -140,6 +141,7 @@ def _(f1_score, mo):
             f1_macro = f1_score(y_true_mc, y_pred_mc, average="macro", zero_division=0)
 
             return 0.5 * f1_binary + 0.5 * f1_macro
+
     return (CompetitionMetric,)
 
 
@@ -176,6 +178,7 @@ def _(mo):
             "Accuracy": round(accuracy, 5),
             "NPV": round(npv, 5),
         }
+
     return (calculate_metrics_from_confusion_matrix,)
 
 
@@ -194,6 +197,7 @@ def _(calculate_metrics_from_confusion_matrix, mo):
         tn = ((y_true != positive_class) & (y_pred != positive_class)).sum()
 
         return calculate_metrics_from_confusion_matrix(tp, fn, fp, tn)
+
     return (calculate_binary_metrics,)
 
 
@@ -211,6 +215,7 @@ def _(calculate_metrics_from_confusion_matrix, mo):
         tn = (~actual_positive & ~pred_positive).sum()
 
         return calculate_metrics_from_confusion_matrix(tp, fn, fp, tn)
+
     return (calculate_collapsed_metrics,)
 
 
@@ -299,6 +304,7 @@ def _(CHART_HEIGHT, CHART_WIDTH, GESTURE_TYPE_COLORS, alt, mo, pd):
             chart = error_bars + points + zero_rule
 
         return chart.properties(title=title, width=CHART_WIDTH)
+
     return
 
 
@@ -365,6 +371,7 @@ def _(mo):
             return df[mask]
         else:
             return df
+
     return apply_data_filters, build_filter_masks
 
 
@@ -411,6 +418,7 @@ def _(mo):
             if filter_parts
             else "No filter selected, including the whole dataset"
         )
+
     return (create_filter_summary,)
 
 
@@ -450,6 +458,7 @@ def _(mo, pd):
                 )
 
         return pd.DataFrame(stacked_rows)
+
     return (stack_submissions,)
 
 
@@ -479,6 +488,7 @@ def _(calculate_binary_metrics, calculate_collapsed_metrics, mo):
             raise ValueError(f"Unknown metric_type: {metric_type}")
 
         return metrics["F1-Score"]
+
     return (compute_f1_score,)
 
 
@@ -549,6 +559,7 @@ def _(METRIC_PRECISION, compute_f1_score, mo):
             "n_all": int(n_all),
             "n_imu": int(n_imu),
         }
+
     return (compute_simple_delta,)
 
 
@@ -685,6 +696,7 @@ def _(
             "n_all": int(n_all),
             "n_imu": int(n_imu),
         }
+
     return (bootstrap_delta_ci,)
 
 
@@ -697,7 +709,22 @@ def _(DATA_URL, mo, pd):
     df["public"] = df["Usage"] == "Public"
     df = df.drop(columns=["Usage"])
 
-    mo.vstack([mo.md("## Top 20 Submission Results"), df])
+    # Create data dictionary explaining the columns
+    data_dictionary = mo.md("""
+    ### Dataset Column Descriptions
+
+    - **sequence_id** (string): Anonymized unique identifier for each gesture sequence in the test set (format: ANON_XXXXXX)
+
+    - **gesture0-gesture19** (string): Predicted gesture labels from each of the 20 top-performing competition submissions
+
+    - **gesture_true** (string): Ground truth gesture label from the competition test set
+
+    - **all_sensors** (boolean): Whether the sequence includes data from all available sensors (True) or only IMU sensors (False)
+
+    - **public** (boolean): Whether the sequence belongs to the public test set (True) or private test set (False)
+    """)
+
+    mo.vstack([mo.md("## Top 20 Submission Results"), data_dictionary, df])
     return (df,)
 
 
@@ -1091,7 +1118,9 @@ def _(
                         y=alt.Y(
                             "value:Q", title="Competition Metric Delta (All − IMU)"
                         ),
-                        color=alt.Color("value:Q", scale=alt.Scale(scheme="reds"), legend=None),
+                        color=alt.Color(
+                            "value:Q", scale=alt.Scale(scheme="reds"), legend=None
+                        ),
                         tooltip=[
                             alt.Tooltip("metric:N", title="Metric"),
                             alt.Tooltip("value:Q", format=".4f", title="Delta Value"),
@@ -1540,6 +1569,10 @@ def _(
         )
         eval_df.reset_index(drop=True, inplace=True)
 
+        # Add 1-FNR and 1-FPR columns for tooltip display
+        eval_df["1-FNR"] = 1 - eval_df["FNR"]
+        eval_df["1-FPR"] = 1 - eval_df["FPR"]
+
         # Create display elements
         _filter_summary = create_filter_summary(
             public_filter,
@@ -1625,6 +1658,10 @@ def _(
             by=["gesture_type", "gesture"], ascending=[False, True]
         )
         eval_df.reset_index(drop=True, inplace=True)
+
+        # Add 1-FNR and 1-FPR columns for tooltip display
+        eval_df["1-FNR"] = 1 - eval_df["FNR"]
+        eval_df["1-FPR"] = 1 - eval_df["FPR"]
 
         # Create display elements
         _filter_summary = create_filter_summary(
@@ -1723,8 +1760,12 @@ def _(
                     alt.Tooltip(
                         "NPV:Q", format=".3f", title="Negative Predictive Value"
                     ),
-                    alt.Tooltip("1-FNR:Q", title="1 - False Negative Rate"),
-                    alt.Tooltip("1-FPR:Q", title="1 - False Positive Rate"),
+                    alt.Tooltip(
+                        "1-FNR:Q", format=".3f", title="1 - False Negative Rate"
+                    ),
+                    alt.Tooltip(
+                        "1-FPR:Q", format=".3f", title="1 - False Positive Rate"
+                    ),
                 ],
             )
             .properties(
@@ -1782,8 +1823,12 @@ def _(
                     alt.Tooltip(
                         "NPV:Q", format=".3f", title="Negative Predictive Value"
                     ),
-                    alt.Tooltip("1-FNR:Q", title="1 - False Negative Rate"),
-                    alt.Tooltip("1-FPR:Q", title="1 - False Positive Rate"),
+                    alt.Tooltip(
+                        "1-FNR:Q", format=".3f", title="1 - False Negative Rate"
+                    ),
+                    alt.Tooltip(
+                        "1-FPR:Q", format=".3f", title="1 - False Positive Rate"
+                    ),
                 ],
             )
             .properties(
