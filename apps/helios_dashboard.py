@@ -54,8 +54,6 @@ def _():
         "Recall",
         "Specificity",
         "NPV",
-        "1-FNR",
-        "1-FPR",
     ]
 
     # Precision for rounding metrics
@@ -1577,10 +1575,6 @@ def _(
         )
         eval_df.reset_index(drop=True, inplace=True)
 
-        # Add 1-FNR and 1-FPR columns for tooltip display
-        eval_df["1-FNR"] = 1 - eval_df["FNR"]
-        eval_df["1-FPR"] = 1 - eval_df["FPR"]
-
         # Create display elements
         _filter_summary = create_filter_summary(
             public_filter,
@@ -1666,10 +1660,6 @@ def _(
             by=["gesture_type", "gesture"], ascending=[False, True]
         )
         eval_df.reset_index(drop=True, inplace=True)
-
-        # Add 1-FNR and 1-FPR columns for tooltip display
-        eval_df["1-FNR"] = 1 - eval_df["FNR"]
-        eval_df["1-FPR"] = 1 - eval_df["FPR"]
 
         # Create display elements
         _filter_summary = create_filter_summary(
@@ -1768,12 +1758,6 @@ def _(
                     alt.Tooltip(
                         "NPV:Q", format=".3f", title="Negative Predictive Value"
                     ),
-                    alt.Tooltip(
-                        "1-FNR:Q", format=".3f", title="1 - False Negative Rate"
-                    ),
-                    alt.Tooltip(
-                        "1-FPR:Q", format=".3f", title="1 - False Positive Rate"
-                    ),
                 ],
             )
             .properties(
@@ -1830,12 +1814,6 @@ def _(
                     alt.Tooltip("Specificity:Q", format=".3f"),
                     alt.Tooltip(
                         "NPV:Q", format=".3f", title="Negative Predictive Value"
-                    ),
-                    alt.Tooltip(
-                        "1-FNR:Q", format=".3f", title="1 - False Negative Rate"
-                    ),
-                    alt.Tooltip(
-                        "1-FPR:Q", format=".3f", title="1 - False Positive Rate"
                     ),
                 ],
             )
@@ -2443,8 +2421,6 @@ def _(
                 _calculated_metrics = {
                     "Recall": _gesture_metrics["Recall"],
                     "Precision": _gesture_metrics["Precision"],
-                    "1-FPR": 1 - _gesture_metrics["FPR"],  # Transform FPR to 1-FPR
-                    "1-FNR": 1 - _gesture_metrics["FNR"],  # Transform FNR to 1-FNR
                     "Specificity": _gesture_metrics["Specificity"],
                     "F1-Score": _gesture_metrics["F1-Score"],
                     "Accuracy": _gesture_metrics["Accuracy"],
@@ -2621,8 +2597,6 @@ def _(
                 _calculated_metrics = {
                     "Recall": _gesture_metrics["Recall"],
                     "Precision": _gesture_metrics["Precision"],
-                    "1-FPR": 1 - _gesture_metrics["FPR"],  # Transform FPR to 1-FPR
-                    "1-FNR": 1 - _gesture_metrics["FNR"],  # Transform FNR to 1-FNR
                     "Specificity": _gesture_metrics["Specificity"],
                     "F1-Score": _gesture_metrics["F1-Score"],
                     "Accuracy": _gesture_metrics["Accuracy"],

@@ -20,6 +20,7 @@ def _():
     from sklearn.metrics import f1_score
 
     import marimo as mo
+
     return alt, f1_score, mo, np, pd
 
 
@@ -54,8 +55,6 @@ def _():
         "Recall",
         "Specificity",
         "NPV",
-        "1-FNR",
-        "1-FPR",
     ]
 
     # Precision for rounding metrics
@@ -141,6 +140,7 @@ def _(f1_score, mo):
             f1_macro = f1_score(y_true_mc, y_pred_mc, average="macro", zero_division=0)
 
             return 0.5 * f1_binary + 0.5 * f1_macro
+
     return (CompetitionMetric,)
 
 
@@ -177,6 +177,7 @@ def _(mo):
             "Accuracy": round(accuracy, 5),
             "NPV": round(npv, 5),
         }
+
     return (calculate_metrics_from_confusion_matrix,)
 
 
@@ -195,6 +196,7 @@ def _(calculate_metrics_from_confusion_matrix, mo):
         tn = ((y_true != positive_class) & (y_pred != positive_class)).sum()
 
         return calculate_metrics_from_confusion_matrix(tp, fn, fp, tn)
+
     return (calculate_binary_metrics,)
 
 
@@ -212,6 +214,7 @@ def _(calculate_metrics_from_confusion_matrix, mo):
         tn = (~actual_positive & ~pred_positive).sum()
 
         return calculate_metrics_from_confusion_matrix(tp, fn, fp, tn)
+
     return (calculate_collapsed_metrics,)
 
 
@@ -268,6 +271,7 @@ def _(calculate_binary_metrics, calculate_metrics_from_confusion_matrix, mo):
                 macro_metrics[key] = round(macro_metrics[key])
 
         return macro_metrics
+
     return (calculate_macro_averaged_metrics,)
 
 
@@ -334,6 +338,7 @@ def _(mo):
             return df[mask]
         else:
             return df
+
     return apply_data_filters, build_filter_masks
 
 
@@ -380,6 +385,7 @@ def _(mo):
             if filter_parts
             else "No filter selected, including the whole dataset"
         )
+
     return (create_filter_summary,)
 
 
@@ -419,6 +425,7 @@ def _(mo, pd):
                 )
 
         return pd.DataFrame(stacked_rows)
+
     return (stack_submissions,)
 
 
@@ -459,6 +466,7 @@ def _(
             raise ValueError(f"Unknown metric_type: {metric_type}")
 
         return metrics["F1-Score"]
+
     return
 
 
@@ -535,6 +543,7 @@ def _(
             "n_all": int(n_all),
             "n_imu": int(n_imu),
         }
+
     return (compute_simple_delta,)
 
 
@@ -685,6 +694,7 @@ def _(
             "n_all": int(n_all),
             "n_imu": int(n_imu),
         }
+
     return (bootstrap_delta_ci,)
 
 
@@ -1577,10 +1587,6 @@ def _(
         )
         eval_df.reset_index(drop=True, inplace=True)
 
-        # Add 1-FNR and 1-FPR columns for tooltip display
-        eval_df["1-FNR"] = 1 - eval_df["FNR"]
-        eval_df["1-FPR"] = 1 - eval_df["FPR"]
-
         # Create display elements
         _filter_summary = create_filter_summary(
             public_filter,
@@ -1666,10 +1672,6 @@ def _(
             by=["gesture_type", "gesture"], ascending=[False, True]
         )
         eval_df.reset_index(drop=True, inplace=True)
-
-        # Add 1-FNR and 1-FPR columns for tooltip display
-        eval_df["1-FNR"] = 1 - eval_df["FNR"]
-        eval_df["1-FPR"] = 1 - eval_df["FPR"]
 
         # Create display elements
         _filter_summary = create_filter_summary(
@@ -1768,12 +1770,6 @@ def _(
                     alt.Tooltip(
                         "NPV:Q", format=".3f", title="Negative Predictive Value"
                     ),
-                    alt.Tooltip(
-                        "1-FNR:Q", format=".3f", title="1 - False Negative Rate"
-                    ),
-                    alt.Tooltip(
-                        "1-FPR:Q", format=".3f", title="1 - False Positive Rate"
-                    ),
                 ],
             )
             .properties(
@@ -1831,12 +1827,6 @@ def _(
                     alt.Tooltip(
                         "NPV:Q", format=".3f", title="Negative Predictive Value"
                     ),
-                    alt.Tooltip(
-                        "1-FNR:Q", format=".3f", title="1 - False Negative Rate"
-                    ),
-                    alt.Tooltip(
-                        "1-FPR:Q", format=".3f", title="1 - False Positive Rate"
-                    ),
                 ],
             )
             .properties(
@@ -1845,9 +1835,7 @@ def _(
             .interactive()
         )
     else:
-        f1_score_chart = mo.md(
-            "*Select a submission to see per-gesture F1-scores*"
-        )
+        f1_score_chart = mo.md("*Select a submission to see per-gesture F1-scores*")
 
     f1_score_chart
     return
@@ -2443,8 +2431,6 @@ def _(
                 _calculated_metrics = {
                     "Recall": _gesture_metrics["Recall"],
                     "Precision": _gesture_metrics["Precision"],
-                    "1-FPR": 1 - _gesture_metrics["FPR"],  # Transform FPR to 1-FPR
-                    "1-FNR": 1 - _gesture_metrics["FNR"],  # Transform FNR to 1-FNR
                     "Specificity": _gesture_metrics["Specificity"],
                     "F1-Score": _gesture_metrics["F1-Score"],
                     "Accuracy": _gesture_metrics["Accuracy"],
@@ -2621,8 +2607,6 @@ def _(
                 _calculated_metrics = {
                     "Recall": _gesture_metrics["Recall"],
                     "Precision": _gesture_metrics["Precision"],
-                    "1-FPR": 1 - _gesture_metrics["FPR"],  # Transform FPR to 1-FPR
-                    "1-FNR": 1 - _gesture_metrics["FNR"],  # Transform FNR to 1-FNR
                     "Specificity": _gesture_metrics["Specificity"],
                     "F1-Score": _gesture_metrics["F1-Score"],
                     "Accuracy": _gesture_metrics["Accuracy"],
