@@ -20,6 +20,7 @@ def _():
     from sklearn.metrics import f1_score
 
     import marimo as mo
+
     return alt, f1_score, mo, np, pd
 
 
@@ -139,6 +140,7 @@ def _(f1_score, mo):
             f1_macro = f1_score(y_true_mc, y_pred_mc, average="macro", zero_division=0)
 
             return 0.5 * f1_binary + 0.5 * f1_macro
+
     return (CompetitionMetric,)
 
 
@@ -175,6 +177,7 @@ def _(mo):
             "Accuracy": round(accuracy, 5),
             "NPV": round(npv, 5),
         }
+
     return (calculate_metrics_from_confusion_matrix,)
 
 
@@ -193,6 +196,7 @@ def _(calculate_metrics_from_confusion_matrix, mo):
         tn = ((y_true != positive_class) & (y_pred != positive_class)).sum()
 
         return calculate_metrics_from_confusion_matrix(tp, fn, fp, tn)
+
     return (calculate_binary_metrics,)
 
 
@@ -210,6 +214,7 @@ def _(calculate_metrics_from_confusion_matrix, mo):
         tn = (~actual_positive & ~pred_positive).sum()
 
         return calculate_metrics_from_confusion_matrix(tp, fn, fp, tn)
+
     return (calculate_collapsed_metrics,)
 
 
@@ -266,6 +271,7 @@ def _(calculate_binary_metrics, calculate_metrics_from_confusion_matrix, mo):
                 macro_metrics[key] = round(macro_metrics[key])
 
         return macro_metrics
+
     return (calculate_macro_averaged_metrics,)
 
 
@@ -332,6 +338,7 @@ def _(mo):
             return df[mask]
         else:
             return df
+
     return apply_data_filters, build_filter_masks
 
 
@@ -378,6 +385,7 @@ def _(mo):
             if filter_parts
             else "No filter selected, including the whole dataset"
         )
+
     return (create_filter_summary,)
 
 
@@ -417,6 +425,7 @@ def _(mo, pd):
                 )
 
         return pd.DataFrame(stacked_rows)
+
     return (stack_submissions,)
 
 
@@ -457,6 +466,7 @@ def _(
             raise ValueError(f"Unknown metric_type: {metric_type}")
 
         return metrics["F1-Score"]
+
     return
 
 
@@ -533,6 +543,7 @@ def _(
             "n_all": int(n_all),
             "n_imu": int(n_imu),
         }
+
     return (compute_simple_delta,)
 
 
@@ -683,6 +694,7 @@ def _(
             "n_all": int(n_all),
             "n_imu": int(n_imu),
         }
+
     return (bootstrap_delta_ci,)
 
 
@@ -759,13 +771,15 @@ def _(DEFAULT_BOOTSTRAP_SAMPLES, mo):
         value=True, label="Include only-IMU-sensors subset"
     )
     collapse_non_target_filter = mo.ui.switch(
-        value=True, label="Collapse all non-target gestures into one row (pooling)"
+        value=True,
+        label="Collapse all non-target gestures into one row (micro-averaging)",
     )
     collapse_target_filter = mo.ui.switch(
         value=False, label="Collapse all target gestures into one row (macro-averaging)"
     )
     collapse_submissions_filter = mo.ui.switch(
-        value=False, label="Collapse all submissions for overall evaluation (pooling)"
+        value=False,
+        label="Collapse all submissions for overall evaluation (micro-averaging)",
     )
     bootstrap_toggle = mo.ui.switch(
         value=False,
@@ -799,8 +813,8 @@ def _(DEFAULT_BOOTSTRAP_SAMPLES, mo):
             ),
             mo.hstack([collapse_submissions_filter], justify="start", widths=[1]),
             mo.md(
-                "<u>Macro-averaging</u>: Equal weighting regardless of sample count  \n"
-                "<u>Pooling</u>: Sample-weighted averaging"
+                "<u>Macro-averaging</u>: Computes metrics for each class individually, then averages the final metrics. This gives equal weight to each class regardless of sample count.\n"
+                "<u>Micro-averaging</u>: Sums up the true positives, false positives, etc. across all classes before computing the final metrics. This gives more weight to classes with more samples."
             ),
             mo.md("**Bootstrapped Estimation:**"),
             mo.hstack(
@@ -1823,9 +1837,7 @@ def _(
             .interactive()
         )
     else:
-        f1_score_chart = mo.md(
-            "*Select a submission to see per-gesture F1-scores*"
-        )
+        f1_score_chart = mo.md("*Select a submission to see per-gesture F1-scores*")
 
     f1_score_chart
     return

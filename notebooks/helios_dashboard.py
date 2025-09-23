@@ -771,13 +771,15 @@ def _(DEFAULT_BOOTSTRAP_SAMPLES, mo):
         value=True, label="Include only-IMU-sensors subset"
     )
     collapse_non_target_filter = mo.ui.switch(
-        value=True, label="Collapse all non-target gestures into one row (pooling)"
+        value=True,
+        label="Collapse all non-target gestures into one row (micro-averaging)",
     )
     collapse_target_filter = mo.ui.switch(
         value=False, label="Collapse all target gestures into one row (macro-averaging)"
     )
     collapse_submissions_filter = mo.ui.switch(
-        value=False, label="Collapse all submissions for overall evaluation (pooling)"
+        value=False,
+        label="Collapse all submissions for overall evaluation (micro-averaging)",
     )
     bootstrap_toggle = mo.ui.switch(
         value=False,
@@ -811,8 +813,8 @@ def _(DEFAULT_BOOTSTRAP_SAMPLES, mo):
             ),
             mo.hstack([collapse_submissions_filter], justify="start", widths=[1]),
             mo.md(
-                "<u>Macro-averaging</u>: Equal weighting regardless of sample count  \n"
-                "<u>Pooling</u>: Sample-weighted averaging"
+                "<u>Macro-averaging</u>: Computes metrics for each class individually, then averages the final metrics. This gives equal weight to each class regardless of sample count.\n"
+                "<u>Micro-averaging</u>: Sums up the true positives, false positives, etc. across all classes before computing the final metrics. This gives more weight to classes with more samples."
             ),
             mo.md("**Bootstrapped Estimation:**"),
             mo.hstack(
