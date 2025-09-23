@@ -812,10 +812,9 @@ def _(DEFAULT_BOOTSTRAP_SAMPLES, mo):
                 widths=[1, 2],
             ),
             mo.hstack([collapse_submissions_filter], justify="start", widths=[1]),
-            mo.md(
-                "<u>Macro-averaging</u>: Computes metrics for each class individually, then averages the final metrics. This gives equal weight to each class regardless of sample count.\n"
-                "<u>Micro-averaging</u>: Sums up the true positives, false positives, etc. across all classes before computing the final metrics. This gives more weight to classes with more samples."
-            ),
+            mo.md("<u>Macro-averaging</u>: Computes metrics for each class individually, then averages the final metrics. This gives equal weight to each class regardless of sample count."),
+            mo.md("<u>Micro-averaging</u>: Sums up the true positives, false positives, etc. across all classes before computing the final metrics. This gives more weight to classes with more samples."),
+            mo.md("**Bootstrapped Estimation:**"),
             mo.md("**Bootstrapped Estimation:**"),
             mo.hstack(
                 [bootstrap_toggle, bootstrap_samples], justify="start", widths=[1, 2]
