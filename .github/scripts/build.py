@@ -50,8 +50,8 @@ def _export_html_wasm(
     # Convert .py extension to .html for the output file
     output_path: Path = notebook_path.with_suffix(".html")
 
-    # Base command for marimo export
-    cmd: List[str] = ["uvx", "marimo", "export", "html-wasm", "--sandbox"]
+    # Base command for marimo export (pinned to version 0.16.2)
+    cmd: List[str] = ["uvx", "marimo@0.16.2", "export", "html-wasm", "--sandbox"]
 
     # Configure export mode based on whether it's an app or a notebook
     if as_app:
